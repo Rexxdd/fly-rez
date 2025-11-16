@@ -1004,6 +1004,33 @@ end)
 -- Pastikan tombol Fly awalnya tidak aktif
 setButtonActive(FlyBtn, false)
 
+--===== KEYBIND F UNTUK ON/OFF FLY =====--
+
+UserInputService.InputBegan:Connect(function(input, gp)
+    if gp then return end
+    if input.KeyCode == Enum.KeyCode.F then
+        flying = not flying
+
+        if flying then
+            enableFly()
+            Rayfield:Notify({
+                Title = "🕊️ Fly",
+                Content = "Fly Activated via F Key",
+                Duration = 2
+            })
+            FlyToggle:Set(true)   -- sinkron sama UI
+        else
+            disableFly()
+            Rayfield:Notify({
+                Title = "🕊️ Fly",
+                Content = "Fly Disabled via F Key",
+                Duration = 2
+            })
+            FlyToggle:Set(false)  -- sinkron sama UI
+        end
+    end
+end)
+
 
 -- Unanchor
 local UnanchorBtn = createButton("🔓", "Unanchor")
