@@ -8,7 +8,7 @@ local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Parent = PlayerGui
 ScreenGui.Enabled = true
 ScreenGui.ResetOnSpawn = false
-ScreenGui.Name = "JSYCheatGUI"
+ScreenGui.Name = " vip "
 
 -- Lighting Effect Container
 local LightingContainer = Instance.new("Frame")
@@ -1008,14 +1008,14 @@ setButtonActive(FlyBtn, false)
 
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
-    if input.KeyCode == Enum.KeyCode.F then
+    if input.KeyCode == Enum.KeyCode.[ then
         flying = not flying
 
         if flying then
             enableFly()
             Rayfield:Notify({
                 Title = "🕊️ Fly",
-                Content = "Fly Activated via F Key",
+                Content = "Fly Activated via [ Key",
                 Duration = 2
             })
             FlyToggle:Set(true)   -- sinkron sama UI
@@ -1023,7 +1023,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
             disableFly()
             Rayfield:Notify({
                 Title = "🕊️ Fly",
-                Content = "Fly Disabled via F Key",
+                Content = "Fly Disabled via [ Key",
                 Duration = 2
             })
             FlyToggle:Set(false)  -- sinkron sama UI
