@@ -915,7 +915,7 @@ UserInputService.InputEnded:Connect(function(input)
 	if input.KeyCode == Enum.KeyCode.D then pressed.Right = false end
 end)
 
---===== GAMEPAD (LEFT STICK) =====--
+--===== GAMEPAD (LEFT STICK FIXED) =====--
 local DEADZONE = 0.25
 
 UserInputService.InputChanged:Connect(function(input)
@@ -927,24 +927,17 @@ UserInputService.InputChanged:Connect(function(input)
     local x = pos.X
     local y = pos.Y
 
-    -- Reset yang lama
-    pressed.Up = false
-    pressed.Down = false
-    pressed.Left = false
-    pressed.Right = false
-
-    -- Deadzone biar ga gerak sendiri
+    -- Deadzone halus
     if math.abs(x) < DEADZONE then x = 0 end
     if math.abs(y) < DEADZONE then y = 0 end
 
-    -- ↑↓ berdasarkan Y (negatif = maju)
-    if y < -DEADZONE then pressed.Up = true end
-    if y > DEADZONE then pressed.Down = true end
-
-    -- ←→ berdasarkan X
-    if x < -DEADZONE then pressed.Left = true end
-    if x > DEADZONE then pressed.Right = true end
+    -- Reset tidak perlu setiap frame, hanya di-update sesuai arah
+    pressed.Up = (y < 0)       -- y negatif = maju
+    pressed.Down = (y > 0)     -- y positif = mundur
+    pressed.Left = (x < 0)
+    pressed.Right = (x > 0)
 end)
+
   
 --===== LOOP =====--
 RunService.Heartbeat:Connect(function(dt)
