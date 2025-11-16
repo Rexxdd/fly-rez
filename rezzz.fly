@@ -1008,14 +1008,14 @@ setButtonActive(FlyBtn, false)
 
 UserInputService.InputBegan:Connect(function(input, gp)
     if gp then return end
-    if input.KeyCode == Enum.KeyCode.[ then
+    if input.KeyCode == Enum.KeyCode.t then
         flying = not flying
 
         if flying then
             enableFly()
             Rayfield:Notify({
                 Title = "🕊️ Fly",
-                Content = "Fly Activated via [ Key",
+                Content = "Fly Activated via t Key",
                 Duration = 2
             })
             FlyToggle:Set(true)   -- sinkron sama UI
@@ -1023,7 +1023,7 @@ UserInputService.InputBegan:Connect(function(input, gp)
             disableFly()
             Rayfield:Notify({
                 Title = "🕊️ Fly",
-                Content = "Fly Disabled via [ Key",
+                Content = "Fly Disabled via t Key",
                 Duration = 2
             })
             FlyToggle:Set(false)  -- sinkron sama UI
