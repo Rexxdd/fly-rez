@@ -917,6 +917,7 @@ end)
 
 --===== GAMEPAD (LEFT STICK) =====--
 local DEADZONE = 0.25
+local lastX, lastY = 0, 0 -- supaya ga reset kalau stick diem
 
 UserInputService.InputChanged:Connect(function(input)
     if not flying then return end
@@ -927,21 +928,30 @@ UserInputService.InputChanged:Connect(function(input)
     local x = pos.X
     local y = pos.Y
 
-    -- Reset yang lama
+    -- Deadzone untuk stick
+    if math.abs(x) < DEADZONE then x = 0 end
+    if math.abs(y) < DEADZONE then y = 0 end
+
+    -- Hindari reset spam
+    if x == lastX and y == lastY then
+        return
+    end
+    lastX = x
+    lastY = y
+
+    -- Reset dulu hanya jika stick GERAK
     pressed.Up = false
     pressed.Down = false
     pressed.Left = false
     pressed.Right = false
 
-    -- Deadzone biar ga gerak sendiri
-    if math.abs(x) < DEADZONE then x = 0 end
-    if math.abs(y) < DEADZONE then y = 0 end
+    -- === PERBAIKAN UTAMA: sumbu Y ROBLOX terbalik ===
+    -- Maju = y > DEADZONE
+    -- Mundur = y < -DEADZONE
+    if y > DEADZONE then pressed.Up = true end     -- maju
+    if y < -DEADZONE then pressed.Down = true end  -- mundur
 
-    -- ↑↓ berdasarkan Y (negatif = maju)
-    if y < -DEADZONE then pressed.Up = true end
-    if y > DEADZONE then pressed.Down = true end
-
-    -- ←→ berdasarkan X
+    -- Kiri / Kanan tetap sama
     if x < -DEADZONE then pressed.Left = true end
     if x > DEADZONE then pressed.Right = true end
 end)
