@@ -581,24 +581,18 @@ JumpBtn.MouseButton1Click:Connect(function()
     setButtonActive(JumpBtn, infiniteJumpEnabled)
 end)
 
--- === SELENDANG SUPER-CUSTOM (COMPACT GUI, DRAGGABLE, HIDE/UNHIDE) ===
--- Tempel langsung. No speed, no wallhack. Hanya scarf effects.
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Player = Players.LocalPlayer
+--⚡ FINAL SPEED SCRIPT (Tanpa Fungsi Animasi)⚡--
 
--- ======= UTILS =======
-local function lerpColor(c1, c2, t)
-	return Color3.new(
-		c1.R + (c2.R - c1.R) * t,
-		c1.G + (c2.G - c1.G) * t,
-		c1.B + (c2.B - c1.B) * t
-	)
-end
-local function clamp(v, a, b) if v < a then return a end if v > b then return b end return v end
+local Player = game.Players.LocalPlayer
+local SpeedBtn = createButton("⚡", "Speed")
 
--- ======= DEFAULT COLOR PALETTE (rainbow) =======
-local defaultColors = {
+local speedOn = false
+local selendangPart = nil
+
+----------------------------------------------------
+-- 🌈 Warna pelangi
+----------------------------------------------------
+local colors = {
 	Color3.fromRGB(255,0,0),
 	Color3.fromRGB(255,127,0),
 	Color3.fromRGB(255,255,0),
@@ -608,588 +602,123 @@ local defaultColors = {
 	Color3.fromRGB(148,0,211)
 }
 
--- ======= SETTINGS =======
-local Settings = {
-	enabled = false,
-	mode = "Hands",          -- "Hands","Back","Head","Feet","Orbit","Ribbon"
-	colorMode = "Rainbow",   -- "Rainbow","Static","Gradient"
-	staticColor = Color3.fromRGB(255,255,255),
-	gradA = Color3.fromRGB(255,100,0),
-	gradB = Color3.fromRGB(255,0,255),
-	length = 8.0,            -- panjang (meter-like)
-	width = 1.0,             -- lebar (scale)
-	animSpeed = 0.02,        -- warna anim speed
-	trailLifetime = 0.7,
-	maxCount = 120,
-	rainbowTable = defaultColors,
-	presetIndex = 1,
-	orbitRadius = 2.5,       -- untuk Orbit mode
-	orbitSpeed = 2.0
-}
-
--- ======= STORAGE =======
-local selendangParent = nil
-local trails = {}           -- table of Trail instances
-local attachments = {}      -- created attachments to cleanup
-local animTask = nil
-local orbitTask = nil
-
--- ======= CLEANUP =======
-local function cleanup()
-	if animTask then
-		animTask:Cancel()
-		animTask = nil
-	end
-	if orbitTask then
-		orbitTask:Cancel()
-		orbitTask = nil
-	end
-	for _, t in ipairs(trails) do
-		if t and t.Parent then t:Destroy() end
-	end
-	trails = {}
-	for _, a in ipairs(attachments) do
-		if a and a.Parent then a:Destroy() end
-	end
-	attachments = {}
-	if selendangParent and selendangParent.Parent then
-		selendangParent:Destroy()
-	end
-	selendangParent = nil
+local function lerpColor(c1, c2, t)
+	return Color3.new(
+		c1.R + (c2.R - c1.R) * t,
+		c1.G + (c2.G - c1.G) * t,
+		c1.B + (c2.B - c1.B) * t
+	)
 end
 
--- ======= HELPERS TO FIND PARTS (R15 & R6 support) =======
-local function findPart(char, names)
-	for _, n in ipairs(names) do
-		local p = char:FindFirstChild(n)
-		if p then return p end
-	end
-	return nil
-end
-
--- ======= CREATE TRAILS BASED ON MODE =======
-local function createTrailsForMode(char)
-	cleanup()
-	if not char then return end
-
-	-- parent invisible part to hold trails
-	selendangParent = Instance.new("Part")
-	selendangParent.Name = "SelendangParent"
-	selendangParent.Size = Vector3.new(1,1,1)
-	selendangParent.Transparency = 1
-	selendangParent.Anchored = false
-	selendangParent.CanCollide = false
-	selendangParent.Parent = char
-
-	local mode = Settings.mode
-
-	-- local convenience
-	local count = clamp(math.floor(Settings.length * 10), 4, Settings.maxCount)
-	local spacing = -(Settings.length / math.max(count-1,1))
-
-	-- Function to make a trail between two attachment parents with offsetZ
-	local function makeTrail(parentA, parentB, idx, offsetZ, widthScale)
-		-- create attachments on part A & B
-		local attA = Instance.new("Attachment")
-		attA.Name = ("Scarf_Att_%s_A_%d"):format(tostring(idx), idx)
-		attA.Parent = parentA
-		attA.Position = Vector3.new(0, 0, offsetZ)
-		table.insert(attachments, attA)
-
-		local attB = Instance.new("Attachment")
-		attB.Name = ("Scarf_Att_%s_B_%d"):format(tostring(idx), idx)
-		attB.Parent = parentB
-		attB.Position = Vector3.new(0, 0, offsetZ)
-		table.insert(attachments, attB)
-
-		local tr = Instance.new("Trail")
-		tr.Name = "ScarfTrail_"..idx
-		tr.Attachment0 = attA
-		tr.Attachment1 = attB
-		tr.Lifetime = Settings.trailLifetime
-		tr.LightEmission = 1
-		tr.MinLength = 0.05
-		tr.Transparency = NumberSequence.new(0,1)
-		tr.WidthScale = NumberSequence.new(widthScale or Settings.width, 0)
-		tr.Parent = selendangParent
-		table.insert(trails, tr)
+----------------------------------------------------
+-- 🧣 Efek Selendang Pelangi
+----------------------------------------------------
+local function addSelendang(char)
+	if selendangPart then
+		selendangPart:Destroy()
+		selendangPart = nil
 	end
 
-	-- Different mode implementations
-	if mode == "Hands" then
-		local left = findPart(char, {"LeftHand","Left Arm"})
-		local right = findPart(char, {"RightHand","Right Arm"})
-		if not left or not right then return end
-		for i=1,count do
-			local offset = (i-1) * spacing
-			makeTrail(left, right, i, offset, Settings.width)
-		end
+	local torso = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso")
+	if not torso then return end
 
-	elseif mode == "Back" then
-		-- punggung: attach to UpperTorso/HumanoidRootPart as Attachment0 and a distant Attachment1 to create long trail
-		local backPart = findPart(char, {"UpperTorso","Torso","HumanoidRootPart"})
-		local anchor = Instance.new("Part")
-		anchor.Name = "ScarfBackAnchor"
-		anchor.Size = Vector3.new(1,1,1)
-		anchor.Transparency = 1
-		anchor.CanCollide = false
-		anchor.Anchored = false
-		anchor.Parent = selendangParent
-		local weld = Instance.new("WeldConstraint")
-		weld.Part0 = backPart
-		weld.Part1 = anchor
-		weld.Parent = anchor
-		for i=1,count do
-			local offset = (i-1) * spacing
-			-- left-right attachments spaced slightly for width effect
-			local att0 = Instance.new("Attachment", backPart); att0.Position = Vector3.new(-0.6, 0.5, 0)
-			local att1 = Instance.new("Attachment", anchor); att1.Position = Vector3.new(-0.6, 0.5, offset)
-			table.insert(attachments, att0); table.insert(attachments, att1)
-			local tr = Instance.new("Trail")
-			tr.Attachment0 = att0; tr.Attachment1 = att1
-			tr.Parent = selendangParent
-			tr.Lifetime = Settings.trailLifetime; tr.MinLength = 0.05; tr.LightEmission = 1
-			tr.Transparency = NumberSequence.new(0,1)
-			tr.WidthScale = NumberSequence.new(Settings.width,0)
-			table.insert(trails, tr)
-			-- second trail for right side
-			local att2 = Instance.new("Attachment", backPart); att2.Position = Vector3.new(0.6, 0.5, 0)
-			local att3 = Instance.new("Attachment", anchor); att3.Position = Vector3.new(0.6, 0.5, offset)
-			table.insert(attachments, att2); table.insert(attachments, att3)
-			local tr2 = Instance.new("Trail")
-			tr2.Attachment0 = att2; tr2.Attachment1 = att3
-			tr2.Parent = selendangParent
-			tr2.Lifetime = Settings.trailLifetime; tr2.MinLength = 0.05; tr2.LightEmission = 1
-			tr2.Transparency = NumberSequence.new(0,1)
-			tr2.WidthScale = NumberSequence.new(Settings.width*0.8,0)
-			table.insert(trails, tr2)
-		end
+	selendangPart = Instance.new("Part")
+	selendangPart.Name = "SelendangPart"
+	selendangPart.Size = Vector3.new(0.5,0.5,0.5)
+	selendangPart.Transparency = 1
+	selendangPart.Anchored = false
+	selendangPart.CanCollide = false
+	selendangPart.CFrame = torso.CFrame
+	selendangPart.Parent = char
 
-	elseif mode == "Head" then
-		local head = findPart(char, {"Head"})
-		local root = findPart(char, {"HumanoidRootPart","Torso"})
-		if not head or not root then return end
-		for i=1,count do
-			local offset = (i-1) * spacing
-			makeTrail(head, root, i, offset, Settings.width*0.7)
-		end
+	local weld = Instance.new("WeldConstraint")
+	weld.Part0 = torso
+	weld.Part1 = selendangPart
+	weld.Parent = selendangPart
 
-	elseif mode == "Feet" then
-		local leftFoot = findPart(char, {"LeftFoot","LeftLeg","Left Leg"})
-		local rightFoot = findPart(char, {"RightFoot","RightLeg","Right Leg"})
-		if not leftFoot or not rightFoot then return end
-		for i=1,count do
-			local offset = (i-1) * spacing
-			makeTrail(leftFoot, rightFoot, i, offset, Settings.width*0.6)
-		end
+	local trails = {}
+	local spacing = -0.04
+	local startY = 0.5
 
-	elseif mode == "Orbit" then
-		-- create N attachments orbiting HumanoidRootPart and create trails between successive attachments to make ring-like trail
-		local root = findPart(char, {"HumanoidRootPart","Torso","UpperTorso"})
-		if not root then return end
-		local orbitCount = clamp(math.floor(Settings.length * 4), 6, 60)
-		local radius = Settings.orbitRadius
-		for i=1,orbitCount do
-			local ang = (i / orbitCount) * math.pi * 2
-			local att = Instance.new("Attachment", root)
-			att.Position = Vector3.new(math.cos(ang)*radius, 0.5, math.sin(ang)*radius)
-			table.insert(attachments, att)
-		end
-		-- connect each pair to make continuous trail loop (using the same attachment as both ends to get ribbon effect)
-		for i=1,#attachments do
-			local a0 = attachments[i]
-			local a1 = attachments[(i % #attachments) + 1]
-			local tr = Instance.new("Trail")
-			tr.Attachment0 = a0
-			tr.Attachment1 = a1
-			tr.Lifetime = Settings.trailLifetime
-			tr.LightEmission = 1
-			tr.MinLength = 0.02
-			tr.Transparency = NumberSequence.new(0,1)
-			tr.WidthScale = NumberSequence.new(Settings.width,0)
-			tr.Parent = selendangParent
-			table.insert(trails, tr)
-		end
-		-- orbit animation task (rotate attachments around)
-		orbitTask = task.spawn(function()
-			local t = 0
-			while Settings.enabled and selendangParent and selendangParent.Parent do
-				t = t + (Settings.orbitSpeed * 0.02)
-				for i, att in ipairs(attachments) do
-					local ang = (i / #attachments) * math.pi * 2 + t
-					att.Position = Vector3.new(math.cos(ang)*radius, 0.5, math.sin(ang)*radius)
-				end
-				task.wait(0.03)
-			end
-		end)
-		return
-	elseif mode == "Ribbon" then
-		-- wide ribbon: create multiple parallel trails between hands to create ribbon-like appearance
-		local left = findPart(char, {"LeftHand","Left Arm"})
-		local right = findPart(char, {"RightHand","Right Arm"})
-		if not left or not right then return end
-		local rows = clamp(math.floor(Settings.width * 3), 2, 10)
-		for row = 1, rows do
-			local yOffset = (row - (rows/2)) * 0.15
-			for i=1,count do
-				local offset = (i-1) * spacing
-				-- create attachments with slight Y offsets
-				local attL = Instance.new("Attachment", left); attL.Position = Vector3.new(0, yOffset, offset)
-				local attR = Instance.new("Attachment", right); attR.Position = Vector3.new(0, yOffset, offset)
-				table.insert(attachments, attL); table.insert(attachments, attR)
-				local tr = Instance.new("Trail")
-				tr.Attachment0 = attL; tr.Attachment1 = attR
-				tr.Lifetime = Settings.trailLifetime; tr.MinLength = 0.02; tr.LightEmission = 1
-				tr.Transparency = NumberSequence.new(0,1)
-				tr.WidthScale = NumberSequence.new(Settings.width*0.9,0)
-				tr.Parent = selendangParent
-				table.insert(trails, tr)
-			end
-		end
-		return
+	for i = 1, 40 do
+		local yPos = startY + (i-1) * spacing
+		local attLeft = Instance.new("Attachment", selendangPart)
+		attLeft.Position = Vector3.new(-1, yPos, 0)
+
+		local attRight = Instance.new("Attachment", selendangPart)
+		attRight.Position = Vector3.new(1, yPos, 0)
+
+		local newTrail = Instance.new("Trail")
+		newTrail.Attachment0 = attLeft
+		newTrail.Attachment1 = attRight
+		newTrail.Lifetime = 0.6
+		newTrail.MinLength = 0.1
+		newTrail.LightEmission = 1
+		newTrail.Transparency = NumberSequence.new(0,1)
+		newTrail.WidthScale = NumberSequence.new(0.5,0)
+		newTrail.Parent = selendangPart
+
+		table.insert(trails, newTrail)
 	end
-end
 
--- ======= COLOR UPDATE / ANIMATION LOOP =======
-local function startColorAnim()
-	if animTask then
-		animTask:Cancel()
-		animTask = nil
-	end
-	if #trails == 0 then return end
-
-	animTask = task.spawn(function()
+	task.spawn(function()
 		local step = 0
-		while Settings.enabled and selendangParent and selendangParent.Parent do
-			-- compute current color based on colorMode
-			local curColor
-			if Settings.colorMode == "Static" then
-				curColor = Settings.staticColor
-			elseif Settings.colorMode == "Gradient" then
-				-- oscillate between gradA and gradB along step
-				local tt = (math.sin(step * 2 * math.pi) + 1) / 2
-				curColor = lerpColor(Settings.gradA, Settings.gradB, tt)
-			else -- Rainbow
-				local idx1 = math.floor(step) % #Settings.rainbowTable + 1
-				local idx2 = (idx1 % #Settings.rainbowTable) + 1
-				local t = step % 1
-				curColor = lerpColor(Settings.rainbowTable[idx1], Settings.rainbowTable[idx2], t)
-			end
-
-			-- apply to all trails
+		while speedOn and selendangPart and selendangPart.Parent do
+			local idx1 = math.floor(step) % #colors + 1
+			local idx2 = (idx1 % #colors) + 1
+			local t = step % 1
+			local col = lerpColor(colors[idx1], colors[idx2], t)
 			for _, tr in ipairs(trails) do
-				tr.Color = ColorSequence.new(curColor)
-				-- update width & lifetime in real-time
-				tr.WidthScale = NumberSequence.new(Settings.width, 0)
-				tr.Lifetime = Settings.trailLifetime
+				tr.Color = ColorSequence.new(col)
 			end
-
-			step = step + Settings.animSpeed
+			step += 0.02
 			task.wait(0.03)
 		end
 	end)
 end
 
--- ======= APPLY / TOGGLE =======
-local function applySelendang()
-	local char = Player.Character
-	if not char then return end
-	if Settings.enabled then
-		createTrailsForMode(char)
-		startColorAnim()
-	else
-		cleanup()
+local function removeSelendang()
+	if selendangPart then
+		selendangPart:Destroy()
+		selendangPart = nil
 	end
 end
 
--- Ensure when respawn we reapply if enabled
-Player.CharacterAdded:Connect(function(char)
-	task.wait(0.6)
-	if Settings.enabled then
-		applySelendang()
+----------------------------------------------------
+-- ⚡ Toggle Speed (Tanpa Animasi)
+----------------------------------------------------
+SpeedBtn.MouseButton1Click:Connect(function()
+	speedOn = not speedOn
+	local char = Player.Character or Player.CharacterAdded:Wait()
+	local hum = char:FindFirstChild("Humanoid")
+
+	if speedOn then
+		if hum then hum.WalkSpeed = 50 end
+		addSelendang(char)
+		setButtonActive(SpeedBtn, true)
+	else
+		if hum then hum.WalkSpeed = 16 end
+		removeSelendang()
+		setButtonActive(SpeedBtn, false)
 	end
 end)
 
--- If toggling while in game
-local function toggleEnabled(state)
-	Settings.enabled = not Settings.enabled
-	applySelendang()
-end
-
--- ======= PRESETS =======
-local presets = {
-	{ name="Rainbow Hands", apply=function()
-		Settings.mode="Hands"; Settings.colorMode="Rainbow"; Settings.length=8; Settings.width=1.0; Settings.animSpeed=0.02
-	end},
-	{ name="White Ribbon", apply=function()
-		Settings.mode="Ribbon"; Settings.colorMode="Static"; Settings.staticColor=Color3.fromRGB(245,245,255); Settings.length=12; Settings.width=1.6
-	end},
-	{ name="Dragon Tail", apply=function()
-		Settings.mode="Back"; Settings.colorMode="Gradient"; Settings.gradA=Color3.fromRGB(255,100,0); Settings.gradB=Color3.fromRGB(120,0,0); Settings.length=18; Settings.width=0.9
-	end},
-	{ name="Orbit Aura", apply=function()
-		Settings.mode="Orbit"; Settings.colorMode="Rainbow"; Settings.length=6; Settings.width=0.6; Settings.orbitRadius=2.5; Settings.orbitSpeed=1.6
-	end},
-	{ name="Neon Feet", apply=function()
-		Settings.mode="Feet"; Settings.colorMode="Static"; Settings.staticColor=Color3.fromRGB(0,255,200); Settings.length=6; Settings.width=0.8
-	end}
-}
-local function applyPreset(i)
-	i = ((i - 1) % #presets) + 1
-	Settings.presetIndex = i
-	presets[i].apply()
-	applySelendang()
-end
-
--- ======= SIMPLE COMPACT DRAGGABLE GUI =======
-local function createCompactGUI()
-	local playerGui = Player:WaitForChild("PlayerGui")
-	-- ensure single instance
-	local existing = playerGui:FindFirstChild("ScarfCompactGUI")
-	if existing then existing:Destroy() end
-
-	local screen = Instance.new("ScreenGui")
-	screen.Name = "ScarfCompactGUI"
-	screen.ResetOnSpawn = false
-	screen.Parent = playerGui
-
-	local frame = Instance.new("Frame")
-	frame.Name = "CompactFrame"
-	frame.Size = UDim2.new(0, 240, 0, 160)
-	frame.Position = UDim2.new(0.02, 0, 0.7, 0)
-	frame.BackgroundColor3 = Color3.fromRGB(18,18,18)
-	frame.BackgroundTransparency = 0
-	frame.BorderSizePixel = 0
-	frame.Parent = screen
-	frame.Active = true
-
-	-- Title
-	local title = Instance.new("TextLabel")
-	title.Parent = frame
-	title.Size = UDim2.new(1, -40, 0, 26)
-	title.Position = UDim2.new(0, 8, 0, 6)
-	title.BackgroundTransparency = 1
-	title.Text = "Selendang (Compact)"
-	title.TextColor3 = Color3.fromRGB(220,220,220)
-	title.Font = Enum.Font.SourceSansBold
-	title.TextSize = 14
-	title.TextXAlignment = Enum.TextXAlignment.Left
-
-	-- Hide button
-	local hideBtn = Instance.new("TextButton")
-	hideBtn.Parent = frame
-	hideBtn.Size = UDim2.new(0, 24, 0, 24)
-	hideBtn.Position = UDim2.new(1, -32, 0, 6)
-	hideBtn.Text = "-"
-	hideBtn.Font = Enum.Font.SourceSansBold
-	hideBtn.TextSize = 16
-	hideBtn.BackgroundTransparency = 0.2
-
-	-- Toggle On/Off big
-	local toggleBtn = Instance.new("TextButton")
-	toggleBtn.Parent = frame
-	toggleBtn.Size = UDim2.new(0, 64, 0, 32)
-	toggleBtn.Position = UDim2.new(0, 8, 0, 36)
-	toggleBtn.Text = "OFF"
-	toggleBtn.Font = Enum.Font.SourceSansBold
-	toggleBtn.TextSize = 14
-
-	-- Mode dropdown (simple text button cycles modes)
-	local modeBtn = Instance.new("TextButton")
-	modeBtn.Parent = frame
-	modeBtn.Size = UDim2.new(0, 120, 0, 26)
-	modeBtn.Position = UDim2.new(0, 80, 0, 36)
-	modeBtn.Text = "Mode: "..Settings.mode
-	modeBtn.Font = Enum.Font.SourceSans
-	modeBtn.TextSize = 12
-
-	-- Length slider (simple using minus/plus buttons + value display)
-	local lenLbl = Instance.new("TextLabel"); lenLbl.Parent = frame; lenLbl.Size = UDim2.new(0, 120, 0, 20); lenLbl.Position = UDim2.new(0,8,0,72); lenLbl.BackgroundTransparency = 1; lenLbl.Text = "Length: "..tostring(Settings.length); lenLbl.Font = Enum.Font.SourceSans; lenLbl.TextSize = 12; lenLbl.TextColor3 = Color3.fromRGB(220,220,220)
-	local lenMinus = Instance.new("TextButton"); lenMinus.Parent = frame; lenMinus.Size = UDim2.new(0,28,0,20); lenMinus.Position = UDim2.new(0,132,0,72); lenMinus.Text = "-"; lenMinus.Font = Enum.Font.SourceSansBold; lenMinus.TextSize = 14
-	local lenPlus = Instance.new("TextButton"); lenPlus.Parent = frame; lenPlus.Size = UDim2.new(0,28,0,20); lenPlus.Position = UDim2.new(0,164,0,72); lenPlus.Text = "+"; lenPlus.Font = Enum.Font.SourceSansBold; lenPlus.TextSize = 14
-
-	-- Width slider
-	local widLbl = Instance.new("TextLabel"); widLbl.Parent = frame; widLbl.Size = UDim2.new(0,120,0,20); widLbl.Position = UDim2.new(0,8,0,96); widLbl.BackgroundTransparency = 1; widLbl.Text = "Width: "..tostring(Settings.width); widLbl.Font = Enum.Font.SourceSans; widLbl.TextSize = 12; widLbl.TextColor3 = Color3.fromRGB(220,220,220)
-	local widMinus = Instance.new("TextButton"); widMinus.Parent = frame; widMinus.Size = UDim2.new(0,28,0,20); widMinus.Position = UDim2.new(0,132,0,96); widMinus.Text = "-"; widMinus.Font = Enum.Font.SourceSansBold; widMinus.TextSize = 14
-	local widPlus = Instance.new("TextButton"); widPlus.Parent = frame; widPlus.Size = UDim2.new(0,28,0,20); widPlus.Position = UDim2.new(0,164,0,96); widPlus.Text = "+"; widPlus.Font = Enum.Font.SourceSansBold; widPlus.TextSize = 14
-
-	-- Color mode cycle button
-	local colorBtn = Instance.new("TextButton"); colorBtn.Parent = frame; colorBtn.Size = UDim2.new(0, 120, 0, 24); colorBtn.Position = UDim2.new(0,8,0,124); colorBtn.Text = "Color: "..Settings.colorMode; colorBtn.Font = Enum.Font.SourceSans; colorBtn.TextSize = 12
-
-	-- Preset small button
-	local presetBtn = Instance.new("TextButton"); presetBtn.Parent = frame; presetBtn.Size = UDim2.new(0, 98, 0, 24); presetBtn.Position = UDim2.new(0,128,0,124); presetBtn.Text = "Preset"; presetBtn.Font = Enum.Font.SourceSans; presetBtn.TextSize = 12
-
-	-- small instructions (click title to drag)
-	local hint = Instance.new("TextLabel"); hint.Parent = frame; hint.Size = UDim2.new(1, -12, 0, 14); hint.Position = UDim2.new(0,8,1, -22); hint.BackgroundTransparency = 1; hint.Text = "Klik title untuk geser · Klik - untuk hide"; hint.Font = Enum.Font.SourceSans; hint.TextSize = 10; hint.TextColor3 = Color3.fromRGB(170,170,170)
-
-	-- Hide toggle behavior
-	local hiddenFrame = Instance.new("Frame")
-	hiddenFrame.Name = "HiddenSmall"
-	hiddenFrame.Size = UDim2.new(0, 40, 0, 26)
-	hiddenFrame.Position = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset - 8, frame.Position.Y.Scale, frame.Position.Y.Offset)
-	hiddenFrame.BackgroundColor3 = Color3.fromRGB(18,18,18)
-	hiddenFrame.BorderSizePixel = 0
-	hiddenFrame.Parent = screen
-	hiddenFrame.Visible = false
-
-	local showBtn = Instance.new("TextButton"); showBtn.Parent = hiddenFrame; showBtn.Size = UDim2.new(1,0,1,0); showBtn.Text = "☰"; showBtn.Font = Enum.Font.SourceSansBold; showBtn.TextSize = 14
-
-	-- hideBtn logic
-	hideBtn.MouseButton1Click:Connect(function()
-		frame.Visible = false
-		hiddenFrame.Position = UDim2.new(frame.Position.X.Scale, frame.Position.X.Offset, frame.Position.Y.Scale, frame.Position.Y.Offset + 6)
-		hiddenFrame.Visible = true
-	end)
-	showBtn.MouseButton1Click:Connect(function()
-		frame.Visible = true
-		hiddenFrame.Visible = false
-	end)
-
-	-- Dragging (title drag)
-	local dragging, dragInput, dragStart, startPos
-	local function updateDrag(input)
-		local delta = input.Position - dragStart
-		frame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+----------------------------------------------------
+-- 🔁 Aktif setelah respawn
+----------------------------------------------------
+Player.CharacterAdded:Connect(function(char)
+	local hum = char:WaitForChild("Humanoid")
+	task.wait(0.5)
+	if speedOn then
+		hum.WalkSpeed = 50
+		addSelendang(char)
+		setButtonActive(SpeedBtn, true)
+	else
+		hum.WalkSpeed = 16
+		setButtonActive(SpeedBtn, false)
 	end
-	title.InputBegan:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseButton1 then
-			dragging = true
-			dragStart = input.Position
-			startPos = frame.Position
-			input.Changed:Connect(function()
-				if input.UserInputState == Enum.UserInputState.End then
-					dragging = false
-				end
-			end)
-		end
-	end)
-	title.InputChanged:Connect(function(input)
-		if input.UserInputType == Enum.UserInputType.MouseMovement then
-			dragInput = input
-		end
-	end)
-	game:GetService("UserInputService").InputChanged:Connect(function(input)
-		if input == dragInput and dragging then
-			updateDrag(input)
-		end
-	end)
+end)
 
-	-- Button interactions
-	toggleBtn.MouseButton1Click:Connect(function()
-		Settings.enabled = not Settings.enabled
-		toggleBtn.Text = Settings.enabled and "ON" or "OFF"
-		if Settings.enabled then
-			applySelendang()
-		else
-			applySelendang()
-		end
-	end)
-
-	-- Mode cycling
-	local modeOrder = {"Hands","Back","Head","Feet","Orbit","Ribbon"}
-	modeBtn.MouseButton1Click:Connect(function()
-		for i,m in ipairs(modeOrder) do
-			if m == Settings.mode then
-				Settings.mode = modeOrder[(i % #modeOrder) + 1]
-				break
-			end
-		end
-		modeBtn.Text = "Mode: "..Settings.mode
-		if Settings.enabled then applySelendang() end
-	end)
-
-	-- Length buttons
-	lenMinus.MouseButton1Click:Connect(function()
-		Settings.length = clamp(Settings.length - 0.5, 0.5, 50)
-		lenLbl.Text = "Length: "..tostring(Settings.length)
-		if Settings.enabled then applySelendang() end
-	end)
-	lenPlus.MouseButton1Click:Connect(function()
-		Settings.length = clamp(Settings.length + 0.5, 0.5, 50)
-		lenLbl.Text = "Length: "..tostring(Settings.length)
-		if Settings.enabled then applySelendang() end
-	end)
-
-	-- Width buttons
-	widMinus.MouseButton1Click:Connect(function()
-		Settings.width = clamp(Settings.width - 0.1, 0.05, 5)
-		widLbl.Text = "Width: "..string.format("%.2f", Settings.width)
-		if Settings.enabled then applySelendang() end
-	end)
-	widPlus.MouseButton1Click:Connect(function()
-		Settings.width = clamp(Settings.width + 0.1, 0.05, 5)
-		widLbl.Text = "Width: "..string.format("%.2f", Settings.width)
-		if Settings.enabled then applySelendang() end
-	end)
-
-	-- Color mode cycle
-	local colorOrder = {"Rainbow","Static","Gradient"}
-	colorBtn.MouseButton1Click:Connect(function()
-		for i,c in ipairs(colorOrder) do
-			if c == Settings.colorMode then
-				Settings.colorMode = colorOrder[(i % #colorOrder) + 1]
-				break
-			end
-		end
-		colorBtn.Text = "Color: "..Settings.colorMode
-		if Settings.colorMode == "Static" then
-			-- quick pick: open simple prompt to set RGB (use TextBox style)
-			local r = tonumber(string.match(tostring(Settings.staticColor:ToColor3()),"%d+")) or 255 -- fallback
-		end
-		if Settings.enabled then applySelendang() end
-	end)
-
-	-- Preset cycle
-	presetBtn.MouseButton1Click:Connect(function()
-		Settings.presetIndex = (Settings.presetIndex % #presets) + 1
-		applyPreset(Settings.presetIndex)
-		-- Update labels
-		modeBtn.Text = "Mode: "..Settings.mode
-		lenLbl.Text = "Length: "..tostring(Settings.length)
-		widLbl.Text = "Width: "..string.format("%.2f", Settings.width)
-		colorBtn.Text = "Color: "..Settings.colorMode
-		if Settings.enabled then applySelendang() end
-	end)
-
-	-- Quick color edit: open tiny box when double-click colorBtn (simple approach)
-	colorBtn.MouseButton2Click:Connect(function()
-		-- create a tiny modal for RGB input
-		local modal = Instance.new("Frame"); modal.Size = UDim2.new(0,170,0,60); modal.Position = UDim2.new(0,30,0,40); modal.BackgroundColor3 = Color3.fromRGB(28,28,28); modal.BorderSizePixel = 0; modal.Parent = frame
-		local r = Instance.new("TextBox"); r.Size=UDim2.new(0,40,0,18); r.Position=UDim2.new(0,6,0,6); r.Text=tostring(math.floor(Settings.staticColor.R*255)); r.Parent=modal
-		local g = Instance.new("TextBox"); g.Size=UDim2.new(0,40,0,18); g.Position=UDim2.new(0,52,0,6); g.Text=tostring(math.floor(Settings.staticColor.G*255)); g.Parent=modal
-		local b = Instance.new("TextBox"); b.Size=UDim2.new(0,40,0,18); b.Position=UDim2.new(0,98,0,6); b.Text=tostring(math.floor(Settings.staticColor.B*255)); b.Parent=modal
-		local ok = Instance.new("TextButton"); ok.Size=UDim2.new(0,50,0,18); ok.Position=UDim2.new(0,110,0,32); ok.Text="OK"; ok.Parent=modal
-		ok.MouseButton1Click:Connect(function()
-			local rn,gn,bn = tonumber(r.Text), tonumber(g.Text), tonumber(b.Text)
-			if rn and gn and bn then
-				Settings.staticColor = Color3.fromRGB(clamp(math.floor(rn),0,255), clamp(math.floor(gn),0,255), clamp(math.floor(bn),0,255))
-				if Settings.enabled then applySelendang() end
-			end
-			modal:Destroy()
-		end)
-		-- auto remove on leaving
-		task.delay(8, function() if modal and modal.Parent then modal:Destroy() end end)
-	end)
-
-	return screen
-end
-
--- create GUI
-local gui = createCompactGUI()
-
--- Expose simple functions for external calls (if wanted)
-_G.Selendang = {
-	Toggle = function() Settings.enabled = not Settings.enabled; applySelendang() end,
-	Enable = function() Settings.enabled = true; applySelendang() end,
-	Disable = function() Settings.enabled = false; applySelendang() end,
-	ApplyPreset = applyPreset,
-	GetSettings = function() return Settings end
-}
-
--- Auto-apply on load if Settings.enabled true
-if Settings.enabled then applySelendang() end
-
--- End of script
 
 
 -- Fling
