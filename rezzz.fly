@@ -581,18 +581,13 @@ JumpBtn.MouseButton1Click:Connect(function()
     setButtonActive(JumpBtn, infiniteJumpEnabled)
 end)
 
---⚡ FINAL SPEED SCRIPT (Tanpa Fungsi Animasi)⚡--
-
+-- FINAL SPEED + SIMPLE CUSTOM GUI (Tempel ke script lo)
 local Player = game.Players.LocalPlayer
-local SpeedBtn = createButton("⚡", "Speed")
+local SpeedBtn = createButton and createButton("⚡", "Speed") or error("Butuh fungsi createButton")
+local setButtonActive = setButtonActive or function(btn, active) if btn then btn.BackgroundColor3 = active and Color3.fromRGB(85, 170, 255) or Color3.fromRGB(80,80,80) end end
 
-local speedOn = false
-local selendangPart = nil
-
-----------------------------------------------------
--- 🌈 Warna pelangi
-----------------------------------------------------
-local colors = {
+-- Default warna pelangi (dipakai saat rainbow on)
+local defaultColors = {
 	Color3.fromRGB(255,0,0),
 	Color3.fromRGB(255,127,0),
 	Color3.fromRGB(255,255,0),
@@ -602,6 +597,7 @@ local colors = {
 	Color3.fromRGB(148,0,211)
 }
 
+-- util lerp color
 local function lerpColor(c1, c2, t)
 	return Color3.new(
 		c1.R + (c2.R - c1.R) * t,
@@ -610,114 +606,381 @@ local function lerpColor(c1, c2, t)
 	)
 end
 
-----------------------------------------------------
--- 🧣 Efek Selendang Pelangi
-----------------------------------------------------
-local function addSelendang(char)
+-- SETTINGS (bisa diubah lewat GUI)
+local Settings = {
+	length = 8.0,        -- panjang selendang (meter-ish). Semakin besar -> semakin panjang trail
+	width = 1.0,         -- lebar trail scale (pengaruh WidthScale)
+	rainbow = true,      -- rainbow on/off
+	customColor = Color3.fromRGB(255,255,255), -- dipakai jika rainbow == false
+	animSpeed = 0.02,    -- kecepatan perpindahan warna
+	walkSpeed = 50,      -- WalkSpeed saat aktif
+	trailLifetime = 0.7, -- lifetime tiap Trail
+	presetIndex = 1
+}
+
+local selendangPart = nil
+local currentTrails = {}
+local colorTable = defaultColors
+local speedOn = false
+
+-- Helpers: bersihin trail & attachments
+local function cleanupSelendang(char)
+	-- destroy saved part
 	if selendangPart then
 		selendangPart:Destroy()
 		selendangPart = nil
 	end
+	-- remove attachments yang kita buat
+	if char then
+		for _, v in pairs(char:GetDescendants()) do
+			if v:IsA("Attachment") and (v.Name:match("^Scarf_Att_")) then
+				v:Destroy()
+			end
+		end
+	end
+	currentTrails = {}
+end
 
-	local torso = char:FindFirstChild("HumanoidRootPart") or char:FindFirstChild("UpperTorso")
-	if not torso then return end
+-- Fungsi addSelendang: membuat trail dari kedua tangan
+local function addSelendang(char)
+	cleanupSelendang(char)
 
+	local leftHand = char:FindFirstChild("LeftHand") or char:FindFirstChild("Left Arm")
+	local rightHand = char:FindFirstChild("RightHand") or char:FindFirstChild("Right Arm")
+	if not leftHand or not rightHand then return end
+
+	-- small invisible part sebagai parent trail
 	selendangPart = Instance.new("Part")
 	selendangPart.Name = "SelendangPart"
-	selendangPart.Size = Vector3.new(0.5,0.5,0.5)
+	selendangPart.Size = Vector3.new(1,1,1)
 	selendangPart.Transparency = 1
 	selendangPart.Anchored = false
 	selendangPart.CanCollide = false
-	selendangPart.CFrame = torso.CFrame
 	selendangPart.Parent = char
 
 	local weld = Instance.new("WeldConstraint")
-	weld.Part0 = torso
+	weld.Part0 = rightHand
 	weld.Part1 = selendangPart
 	weld.Parent = selendangPart
 
-	local trails = {}
-	local spacing = -0.04
-	local startY = 0.5
+	-- hitung jumlah trail berdasarkan length
+	local count = math.clamp(math.floor(Settings.length * 10), 10, 200)
+	local spacing = - (Settings.length / math.max(count,1))
 
-	for i = 1, 40 do
-		local yPos = startY + (i-1) * spacing
-		local attLeft = Instance.new("Attachment", selendangPart)
-		attLeft.Position = Vector3.new(-1, yPos, 0)
+	-- buat attachments & trails
+	for i = 1, count do
+		local offsetZ = (i - 1) * spacing
 
-		local attRight = Instance.new("Attachment", selendangPart)
-		attRight.Position = Vector3.new(1, yPos, 0)
+		local attL = Instance.new("Attachment")
+		attL.Name = "Scarf_Att_L_"..i
+		attL.Parent = leftHand
+		attL.Position = Vector3.new(0, 0, offsetZ)
 
-		local newTrail = Instance.new("Trail")
-		newTrail.Attachment0 = attLeft
-		newTrail.Attachment1 = attRight
-		newTrail.Lifetime = 0.6
-		newTrail.MinLength = 0.1
-		newTrail.LightEmission = 1
-		newTrail.Transparency = NumberSequence.new(0,1)
-		newTrail.WidthScale = NumberSequence.new(0.5,0)
-		newTrail.Parent = selendangPart
+		local attR = Instance.new("Attachment")
+		attR.Name = "Scarf_Att_R_"..i
+		attR.Parent = rightHand
+		attR.Position = Vector3.new(0, 0, offsetZ)
 
-		table.insert(trails, newTrail)
+		local tr = Instance.new("Trail")
+		tr.Name = "ScarfTrail_"..i
+		tr.Attachment0 = attL
+		tr.Attachment1 = attR
+		tr.Lifetime = Settings.trailLifetime
+		tr.LightEmission = 1
+		tr.MinLength = 0.05
+		tr.Transparency = NumberSequence.new(0,1)
+		-- WidthScale mempengaruhi "lebar" trail; kita gunakan setting.width
+		tr.WidthScale = NumberSequence.new(Settings.width, 0)
+		tr.Parent = selendangPart
+
+		table.insert(currentTrails, tr)
 	end
 
-	task.spawn(function()
-		local step = 0
-		while speedOn and selendangPart and selendangPart.Parent do
-			local idx1 = math.floor(step) % #colors + 1
-			local idx2 = (idx1 % #colors) + 1
-			local t = step % 1
-			local col = lerpColor(colors[idx1], colors[idx2], t)
-			for _, tr in ipairs(trails) do
-				tr.Color = ColorSequence.new(col)
-			end
-			step += 0.02
-			task.wait(0.03)
+	-- jika rainbow off, set color statis; kalau on, jalankan anim loop
+	if not Settings.rainbow then
+		for _, tr in ipairs(currentTrails) do
+			tr.Color = ColorSequence.new(Settings.customColor)
 		end
+	else
+		-- anim warna
+		task.spawn(function()
+			local step = 0
+			while speedOn and selendangPart and selendangPart.Parent do
+				local idx1 = math.floor(step) % #colorTable + 1
+				local idx2 = (idx1 % #colorTable) + 1
+				local t = step % 1
+				local col = lerpColor(colorTable[idx1], colorTable[idx2], t)
+				for _, tr in ipairs(currentTrails) do
+					tr.Color = ColorSequence.new(col)
+					-- update width in case user ubah width realtime
+					tr.WidthScale = NumberSequence.new(Settings.width, 0)
+					tr.Lifetime = Settings.trailLifetime
+				end
+				step = step + Settings.animSpeed
+				task.wait(0.03)
+			end
+		end)
+	end
+end
+
+-- Remove selendang
+local function removeSelendang()
+	local char = Player.Character
+	cleanupSelendang(char)
+end
+
+-- Update selendang (recreate) saat setting berubah
+local updateDebounce = false
+local function updateSelendangNow()
+	if updateDebounce then return end
+	updateDebounce = true
+	task.spawn(function()
+		local char = Player.Character
+		if speedOn and char then
+			addSelendang(char)
+		end
+		task.wait(0.12)
+		updateDebounce = false
 	end)
 end
 
-local function removeSelendang()
-	if selendangPart then
-		selendangPart:Destroy()
-		selendangPart = nil
+-- GUI kecil (simple) - hanya satu panel kecil
+local function createSimpleGUI()
+	local playerGui = Player:WaitForChild("PlayerGui")
+	local screen = Instance.new("ScreenGui")
+	screen.Name = "ScarfCustomGUI"
+	screen.ResetOnSpawn = false
+	screen.Parent = playerGui
+
+	local frame = Instance.new("Frame")
+	frame.Name = "SimplePanel"
+	frame.Size = UDim2.new(0, 260, 0, 220)
+	frame.Position = UDim2.new(0.02, 0, 0.7, 0)
+	frame.BackgroundTransparency = 0.15
+	frame.BackgroundColor3 = Color3.fromRGB(20,20,20)
+	frame.BorderSizePixel = 0
+	frame.Parent = screen
+
+	-- Title
+	local title = Instance.new("TextLabel")
+	title.Size = UDim2.new(1, -12, 0, 30)
+	title.Position = UDim2.new(0,6,0,6)
+	title.BackgroundTransparency = 1
+	title.Text = "Scarf Custom (Simple)"
+	title.TextColor3 = Color3.fromRGB(220,220,220)
+	title.Font = Enum.Font.SourceSansBold
+	title.TextSize = 16
+	title.TextXAlignment = Enum.TextXAlignment.Left
+	title.Parent = frame
+
+	-- Close button
+	local closeBtn = Instance.new("TextButton")
+	closeBtn.Size = UDim2.new(0, 24, 0, 24)
+	closeBtn.Position = UDim2.new(1, -30, 0, 6)
+	closeBtn.Text = "X"
+	closeBtn.Font = Enum.Font.SourceSansBold
+	closeBtn.TextSize = 14
+	closeBtn.BackgroundTransparency = 0.3
+	closeBtn.Parent = frame
+	closeBtn.MouseButton1Click:Connect(function() screen.Enabled = false end)
+
+	-- Row helper
+	local function makeLabel(y, text)
+		local lbl = Instance.new("TextLabel")
+		lbl.Size = UDim2.new(0, 110, 0, 20)
+		lbl.Position = UDim2.new(0, 8, 0, y)
+		lbl.BackgroundTransparency = 1
+		lbl.Text = text
+		lbl.TextColor3 = Color3.fromRGB(200,200,200)
+		lbl.Font = Enum.Font.SourceSans
+		lbl.TextSize = 14
+		lbl.TextXAlignment = Enum.TextXAlignment.Left
+		lbl.Parent = frame
+		return lbl
 	end
+
+	local function makeTextbox(y, initial)
+		local tb = Instance.new("TextBox")
+		tb.Size = UDim2.new(0, 120, 0, 24)
+		tb.Position = UDim2.new(0, 130, 0, y-2)
+		tb.Text = tostring(initial)
+		tb.Font = Enum.Font.SourceSans
+		tb.TextSize = 14
+		tb.BackgroundTransparency = 0.2
+		tb.Parent = frame
+		return tb
+	end
+
+	-- Panjang
+	makeLabel(40, "Panjang (length)")
+	local lengthBox = makeTextbox(40, Settings.length)
+	lengthBox.FocusLost:Connect(function(enter)
+		local v = tonumber(lengthBox.Text)
+		if v and v > 0 then
+			Settings.length = math.clamp(v, 0.5, 50)
+			updateSelendangNow()
+		else
+			lengthBox.Text = tostring(Settings.length)
+		end
+	end)
+
+	-- Lebar
+	makeLabel(70, "Lebar (width)")
+	local widthBox = makeTextbox(70, Settings.width)
+	widthBox.FocusLost:Connect(function()
+		local v = tonumber(widthBox.Text)
+		if v and v > 0 then
+			Settings.width = math.clamp(v, 0.05, 5)
+			updateSelendangNow()
+		else
+			widthBox.Text = tostring(Settings.width)
+		end
+	end)
+
+	-- Anim speed
+	makeLabel(100, "Kecepatan Warna")
+	local animBox = makeTextbox(100, Settings.animSpeed)
+	animBox.FocusLost:Connect(function()
+		local v = tonumber(animBox.Text)
+		if v and v > 0 then
+			Settings.animSpeed = math.clamp(v, 0.001, 0.2)
+		else
+			animBox.Text = tostring(Settings.animSpeed)
+		end
+	end)
+
+	-- WalkSpeed
+	makeLabel(130, "WalkSpeed saat aktif")
+	local wsBox = makeTextbox(130, Settings.walkSpeed)
+	wsBox.FocusLost:Connect(function()
+		local v = tonumber(wsBox.Text)
+		if v and v >= 16 and v <= 300 then
+			Settings.walkSpeed = v
+		else
+			wsBox.Text = tostring(Settings.walkSpeed)
+		end
+	end)
+
+	-- Rainbow toggle
+	local rainbowBtn = Instance.new("TextButton")
+	rainbowBtn.Size = UDim2.new(0, 120, 0, 28)
+	rainbowBtn.Position = UDim2.new(0, 8, 0, 160)
+	rainbowBtn.Text = Settings.rainbow and "Rainbow: ON" or "Rainbow: OFF"
+	rainbowBtn.Font = Enum.Font.SourceSansBold
+	rainbowBtn.TextSize = 14
+	rainbowBtn.Parent = frame
+	rainbowBtn.MouseButton1Click:Connect(function()
+		Settings.rainbow = not Settings.rainbow
+		rainbowBtn.Text = Settings.rainbow and "Rainbow: ON" or "Rainbow: OFF"
+		updateSelendangNow()
+	end)
+
+	-- Color pick (simple: 3 textbox untuk RGB) - hanya berguna jika rainbow off
+	local colorLabel = makeLabel(190, "Color (R G B) - untuk static")
+	local rBox = Instance.new("TextBox"); rBox.Size = UDim2.new(0,36,0,20); rBox.Position = UDim2.new(0,130,0,188); rBox.Text = tostring(math.floor(Settings.customColor.R*255)); rBox.Parent = frame
+	local gBox = Instance.new("TextBox"); gBox.Size = UDim2.new(0,36,0,20); gBox.Position = UDim2.new(0,170,0,188); gBox.Text = tostring(math.floor(Settings.customColor.G*255)); gBox.Parent = frame
+	local bBox = Instance.new("TextBox"); bBox.Size = UDim2.new(0,36,0,20); bBox.Position = UDim2.new(0,210,0,188); bBox.Text = tostring(math.floor(Settings.customColor.B*255)); bBox.Parent = frame
+
+	local function applyColorBoxes()
+		local r = tonumber(rBox.Text); local g = tonumber(gBox.Text); local b = tonumber(bBox.Text)
+		if r and g and b then
+			r = math.clamp(math.floor(r),0,255)
+			g = math.clamp(math.floor(g),0,255)
+			b = math.clamp(math.floor(b),0,255)
+			Settings.customColor = Color3.fromRGB(r,g,b)
+			updateSelendangNow()
+		else
+			rBox.Text = tostring(math.floor(Settings.customColor.R*255))
+			gBox.Text = tostring(math.floor(Settings.customColor.G*255))
+			bBox.Text = tostring(math.floor(Settings.customColor.B*255))
+		end
+	end
+	rBox.FocusLost:Connect(applyColorBoxes)
+	gBox.FocusLost:Connect(applyColorBoxes)
+	bBox.FocusLost:Connect(applyColorBoxes)
+
+	-- Preset button (siklus beberapa preset sederhana)
+	local presets = {
+		{ name="Super Sonic", apply=function()
+			Settings.length = 12; Settings.width = 1.4; Settings.rainbow = true; Settings.animSpeed = 0.03; Settings.walkSpeed = 80
+		end},
+		{ name="Anime Glow", apply=function()
+			Settings.length = 9; Settings.width = 1.2; Settings.rainbow = false; Settings.customColor = Color3.fromRGB(200,200,255); Settings.animSpeed = 0.01; Settings.walkSpeed = 55
+		end},
+		{ name="Dragon Tail", apply=function()
+			Settings.length = 20; Settings.width = 0.9; Settings.rainbow = false; Settings.customColor = Color3.fromRGB(255,100,0); Settings.animSpeed = 0.02; Settings.walkSpeed = 60
+		end},
+		{ name="Neon", apply=function()
+			Settings.length = 10; Settings.width = 1.6; Settings.rainbow = true; Settings.animSpeed = 0.01; Settings.walkSpeed = 65
+		end}
+	}
+	local presetBtn = Instance.new("TextButton")
+	presetBtn.Size = UDim2.new(0, 120, 0, 28)
+	presetBtn.Position = UDim2.new(0, 130, 0, 160)
+	presetBtn.Text = "Preset: "..presets[Settings.presetIndex].name
+	presetBtn.Font = Enum.Font.SourceSansBold
+	presetBtn.TextSize = 13
+	presetBtn.Parent = frame
+	presetBtn.MouseButton1Click:Connect(function()
+		Settings.presetIndex = (Settings.presetIndex % #presets) + 1
+		presetBtn.Text = "Preset: "..presets[Settings.presetIndex].name
+		presets[Settings.presetIndex].apply()
+		lengthBox.Text = tostring(Settings.length)
+		widthBox.Text = tostring(Settings.width)
+		animBox.Text = tostring(Settings.animSpeed)
+		wsBox.Text = tostring(Settings.walkSpeed)
+		rainbowBtn.Text = Settings.rainbow and "Rainbow: ON" or "Rainbow: OFF"
+		rBox.Text = tostring(math.floor(Settings.customColor.R*255))
+		gBox.Text = tostring(math.floor(Settings.customColor.G*255))
+		bBox.Text = tostring(math.floor(Settings.customColor.B*255))
+		updateSelendangNow()
+	end)
+
+	-- start hidden
+	screen.Enabled = false
+
+	return screen
 end
 
-----------------------------------------------------
--- ⚡ Toggle Speed (Tanpa Animasi)
-----------------------------------------------------
+-- create GUI once
+local gui = createSimpleGUI()
+
+-- konek ke SpeedBtn: tampilkan GUI ketika speedOn = true
 SpeedBtn.MouseButton1Click:Connect(function()
 	speedOn = not speedOn
 	local char = Player.Character or Player.CharacterAdded:Wait()
 	local hum = char:FindFirstChild("Humanoid")
-
 	if speedOn then
-		if hum then hum.WalkSpeed = 50 end
+		if hum then hum.WalkSpeed = Settings.walkSpeed end
 		addSelendang(char)
 		setButtonActive(SpeedBtn, true)
+		gui.Enabled = true
 	else
 		if hum then hum.WalkSpeed = 16 end
 		removeSelendang()
 		setButtonActive(SpeedBtn, false)
+		gui.Enabled = false
 	end
 end)
 
-----------------------------------------------------
--- 🔁 Aktif setelah respawn
-----------------------------------------------------
+-- kalau respawn: restore sesuai setting
 Player.CharacterAdded:Connect(function(char)
 	local hum = char:WaitForChild("Humanoid")
 	task.wait(0.5)
 	if speedOn then
-		hum.WalkSpeed = 50
+		hum.WalkSpeed = Settings.walkSpeed
 		addSelendang(char)
 		setButtonActive(SpeedBtn, true)
+		gui.Enabled = true
 	else
 		hum.WalkSpeed = 16
 		setButtonActive(SpeedBtn, false)
+		gui.Enabled = false
 	end
 end)
+
+-- kalau user ganti settings dari luar, bisa panggil updateSelendangNow()
+_G.UpdateScarfSettings = updateSelendangNow
 
 
 
