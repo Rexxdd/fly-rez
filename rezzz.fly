@@ -751,10 +751,8 @@ FlingBtn.MouseButton1Click:Connect(function()
     end
 end)
 
---// 🕊️ Fly + Noclip (Full Freeze Lock Version)
--- CFrame-based (tanpa BodyVelocity)
--- Benar-benar freeze saat idle (tidak turun sedikit pun)
--- Idle animasi tetap aktif
+--// 🕊️ Fly + Noclip (Fixed Full Version + Speed UI)
+-- Paste keseluruhan ini (hapus versi lama)
 
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
@@ -763,82 +761,89 @@ local UserInputService = game:GetService("UserInputService")
 local Workspace = game:GetService("Workspace")
 
 local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
 local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local root = character:WaitForChild("HumanoidRootPart")
 
---// ===== ANIMASI (SMOOTH FIX) ===== //
+--===== ANIMASI =====--
 local animations = {
-    Idle = 97496804953177,
-    Fly  = 95412133796590,
+    Idle = 100681208320300,
+    Fly  = 73980801925168,
 }
 
 local animTracks = {}
 local animator
 
 local function setupAnimator(hum)
-    -- pastikan Animator ada
     animator = hum:FindFirstChildOfClass("Animator")
     if not animator then
         animator = Instance.new("Animator")
         animator.Parent = hum
     end
-
-    -- stop & clear track lama
-    for _, track in pairs(animTracks) do
-        pcall(function()
-            track:Stop(0.2)
-            track:Destroy()
-        end)
-    end
     animTracks = {}
-
-    -- load anim
     for name, id in pairs(animations) do
-        local anim = Instance.new("Animation")
-        anim.AnimationId = "rbxassetid://" .. id
-
-        local track = animator:LoadAnimation(anim)
-        track.Priority = Enum.AnimationPriority.Action
-        track.Looped = true
-        track:AdjustSpeed(1)
-
-        animTracks[name] = track
-    end
-end
-
--- helper play anim (biar transisi halus)
-local function playAnim(name)
-    for n, track in pairs(animTracks) do
-        if n == name then
-            if not track.IsPlaying then
-                track:Play(0.25) -- fade in smooth
-            end
-        else
-            if track.IsPlaying then
-                track:Stop(0.25)
-            end
+        local ok, track = pcall(function()
+            local anim = Instance.new("Animation")
+            anim.AnimationId = "rbxassetid://" .. tostring(id)
+            return animator:LoadAnimation(anim)
+        end)
+        if ok and track then
+            track.Priority = Enum.AnimationPriority.Action
+            track.Looped = true
+            animTracks[name] = track
         end
     end
 end
-
 setupAnimator(humanoid)
 
---//===== VARIABEL =====//
+--===== VARIABEL =====--
 local flying = false
-local flySpeed = 1
+local flySpeed = 5
 local pressed = {Up=false,Down=false,Left=false,Right=false}
 local moving = false
 local savedOrientation = nil
 local oldGravity = Workspace.Gravity
 local frozenPos = nil
 
---//===== GUI =====//
+--===== GUI =====--
 local gui = Instance.new("ScreenGui")
-gui.Name = "FlyGui"
+gui.Name = "FlyGui_Fixed"
 gui.ResetOnSpawn = false
-gui.Parent = game:GetService("CoreGui")
+gui.DisplayOrder = 999
+gui.Parent = playerGui
 
+--===== Helper Buat Tombol =====--
+local function createButton(txt, name)
+    local btn = Instance.new("TextButton")
+    btn.Name = name or ("Btn_"..tostring(txt))
+    btn.Size = UDim2.new(0,55,0,55)
+    btn.Position = UDim2.new(0,15,1,-80) -- default; caller bisa ubah pos
+    btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Font = Enum.Font.GothamBold
+    btn.TextSize = 28
+    btn.Text = txt
+    btn.Parent = gui
+    local uc = Instance.new("UICorner", btn)
+    uc.CornerRadius = UDim.new(0,12)
+    return btn
+end
+
+local function setButtonActive(btn, state)
+    if not btn then return end
+    if state then
+        btn.BackgroundColor3 = Color3.fromRGB(0,140,255)
+    else
+        btn.BackgroundColor3 = Color3.fromRGB(40,40,40)
+    end
+end
+
+-- Tombol Fly (posisi bisa diubah)
+local FlyBtn = createButton("🕊️", "FlyButton")
+FlyBtn.Position = UDim2.new(0,15,1,-80)
+
+--===== D-Pad =====--
 local DPad = Instance.new("Frame")
 DPad.Size = UDim2.new(0,140,0,140)
 DPad.Position = UDim2.new(0,15,1,-155)
@@ -848,13 +853,13 @@ DPad.Visible = false
 DPad.Parent = gui
 Instance.new("UICorner", DPad).CornerRadius = UDim.new(0,12)
 
-local function createBtn(txt,pos)
+local function createDPadBtn(txt,pos)
     local btn = Instance.new("TextButton")
     btn.Text = txt
     btn.Size = UDim2.new(0,45,0,45)
     btn.Position = pos
     btn.BackgroundColor3 = Color3.fromRGB(50,50,50)
-    btn.TextColor3 = Color3.fromRGB(255,255,255)
+    btn.TextColor3 = Color3.new(1,1,1)
     btn.Font = Enum.Font.GothamBold
     btn.TextSize = 20
     btn.Parent = DPad
@@ -862,144 +867,244 @@ local function createBtn(txt,pos)
     return btn
 end
 
-local UpBtn = createBtn("↑", UDim2.new(0.5,-22,0,8))
-local DownBtn = createBtn("↓", UDim2.new(0.5,-22,1,-53))
-local LeftBtn = createBtn("←", UDim2.new(0,8,0.5,-22))
-local RightBtn = createBtn("→", UDim2.new(1,-53,0.5,-22))
+local UpBtn    = createDPadBtn("↑", UDim2.new(0.5,-22,0,8))
+local DownBtn  = createDPadBtn("↓", UDim2.new(0.5,-22,1,-53))
+local LeftBtn  = createDPadBtn("←", UDim2.new(0,8,0.5,-22))
+local RightBtn = createDPadBtn("→", UDim2.new(1,-53,0.5,-22))
 
 local function connectBtn(btn,key)
-    btn.MouseButton1Down:Connect(function() pressed[key]=true btn.BackgroundColor3=Color3.fromRGB(90,90,90) end)
-    btn.MouseButton1Up:Connect(function() pressed[key]=false btn.BackgroundColor3=Color3.fromRGB(50,50,50) end)
+    btn.MouseButton1Down:Connect(function()
+        pressed[key]=true
+        btn.BackgroundColor3=Color3.fromRGB(90,90,90)
+    end)
+    btn.MouseButton1Up:Connect(function()
+        pressed[key]=false
+        btn.BackgroundColor3=Color3.fromRGB(50,50,50)
+    end)
+    -- also stop when mouse leaves (safety)
+    btn.MouseLeave:Connect(function()
+        pressed[key]=false
+        btn.BackgroundColor3=Color3.fromRGB(50,50,50)
+    end)
 end
 connectBtn(UpBtn,"Up")
 connectBtn(DownBtn,"Down")
 connectBtn(LeftBtn,"Left")
 connectBtn(RightBtn,"Right")
 
-local FlyBtn = createButton("🕊️", "Fly")
+--===== SPEED UI =====--
+local SpeedFrame = Instance.new("Frame")
+SpeedFrame.Size = UDim2.new(0,170,0,70)
+SpeedFrame.Position = UDim2.new(0,15,1,-230)
+SpeedFrame.BackgroundColor3 = Color3.fromRGB(25,25,25)
+SpeedFrame.BackgroundTransparency = 0.05
+SpeedFrame.Visible = false
+SpeedFrame.Parent = gui
+Instance.new("UICorner", SpeedFrame).CornerRadius = UDim.new(0,12)
 
---===== HELPER =====--
+local SpeedLabel = Instance.new("TextLabel")
+SpeedLabel.Size = UDim2.new(1,0,0,25)
+SpeedLabel.BackgroundTransparency = 1
+SpeedLabel.TextColor3 = Color3.new(1,1,1)
+SpeedLabel.Font = Enum.Font.GothamBold
+SpeedLabel.TextSize = 18
+SpeedLabel.Text = "Speed: "..flySpeed
+SpeedLabel.Parent = SpeedFrame
+
+local PlusBtn = Instance.new("TextButton")
+PlusBtn.Size = UDim2.new(0,45,0,35)
+PlusBtn.Position = UDim2.new(1,-50,0,28)
+PlusBtn.Text = "+"
+PlusBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+PlusBtn.TextColor3 = Color3.new(1,1,1)
+PlusBtn.Font = Enum.Font.GothamBold
+PlusBtn.TextSize = 24
+PlusBtn.Parent = SpeedFrame
+Instance.new("UICorner", PlusBtn).CornerRadius = UDim.new(0,8)
+
+local MinusBtn = Instance.new("TextButton")
+MinusBtn.Size = UDim2.new(0,45,0,35)
+MinusBtn.Position = UDim2.new(0,5,0,28)
+MinusBtn.Text = "-"
+MinusBtn.BackgroundColor3 = Color3.fromRGB(50,50,50)
+MinusBtn.TextColor3 = Color3.new(1,1,1)
+MinusBtn.Font = Enum.Font.GothamBold
+MinusBtn.TextSize = 28
+MinusBtn.Parent = SpeedFrame
+Instance.new("UICorner", MinusBtn).CornerRadius = UDim.new(0,8)
+
+local SliderBack = Instance.new("Frame")
+SliderBack.Size = UDim2.new(1,-110,0,6)
+SliderBack.Position = UDim2.new(0,55,0,48)
+SliderBack.BackgroundColor3 = Color3.fromRGB(60,60,60)
+SliderBack.Parent = SpeedFrame
+Instance.new("UICorner", SliderBack).CornerRadius = UDim.new(1,0)
+
+local SliderFill = Instance.new("Frame")
+SliderFill.Size = UDim2.new(0,0,1,0)
+SliderFill.BackgroundColor3 = Color3.fromRGB(120,120,255)
+SliderFill.Parent = SliderBack
+Instance.new("UICorner", SliderFill).CornerRadius = UDim.new(1,0)
+
+local function updateSlider()
+    local percent = math.clamp(flySpeed/20, 0, 1)
+    SliderFill.Size = UDim2.new(percent,0,1,0)
+    SpeedLabel.Text = "Speed: "..flySpeed
+end
+
+PlusBtn.MouseButton1Click:Connect(function()
+    flySpeed = math.clamp(flySpeed + 1, 1, 20)
+    updateSlider()
+end)
+
+MinusBtn.MouseButton1Click:Connect(function()
+    flySpeed = math.clamp(flySpeed - 1, 1, 20)
+    updateSlider()
+end)
+
+-- Slider drag logic (safeguarded)
+local dragging = false
+SliderBack.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+    end
+end)
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+RunService.RenderStepped:Connect(function()
+    if dragging then
+        if SliderBack.AbsoluteSize.X == 0 then return end
+        local mouseX = UserInputService:GetMouseLocation().X
+        local rel = math.clamp(mouseX - SliderBack.AbsolutePosition.X, 0, SliderBack.AbsoluteSize.X)
+        local percent = rel / SliderBack.AbsoluteSize.X
+        local newSpeed = math.floor(percent * 20 + 0.5)
+        if newSpeed < 1 then newSpeed = 1 end
+        flySpeed = newSpeed
+        updateSlider()
+    end
+end)
+
+updateSlider()
+
+--===== Noclip =====--
 local function noclip(state)
-    for _,v in pairs(character:GetDescendants()) do
+    -- gunakan current character (could change on respawn)
+    local ch = character
+    if not ch then return end
+    for _,v in pairs(ch:GetDescendants()) do
         if v:IsA("BasePart") then
             v.CanCollide = not state
         end
     end
 end
 
---===== FLY SYSTEM =====--
+--===== FLY =====--
 local function enableFly()
+    if not root or not humanoid then return end
     flying = true
     DPad.Visible = true
+    SpeedFrame.Visible = true
     humanoid.PlatformStand = true
     noclip(true)
     Workspace.Gravity = 0
-    
-    -- Set tombol aktif (biru)
     setButtonActive(FlyBtn, true)
 
-    -- Simpan orientasi & posisi awal - PERBAIKAN DI SINI
     frozenPos = root.Position
-    -- Gunakan CFrame untuk mendapatkan orientasi, bukan Vector3
+    -- ToOrientation returns radians already
     local _, y, _ = root.CFrame:ToOrientation()
-    savedOrientation = CFrame.Angles(0, math.rad(y), 0)
+    savedOrientation = CFrame.Angles(0, y, 0)
 
-    if animTracks.Idle then animTracks.Idle:Play() end
+    if animTracks and animTracks.Idle then
+        pcall(function() animTracks.Idle:Play() end)
+    end
 end
 
 local function disableFly()
     flying = false
     DPad.Visible = false
-    humanoid.PlatformStand = false
+    SpeedFrame.Visible = false
+    if humanoid then pcall(function() humanoid.PlatformStand = false end) end
     noclip(false)
     Workspace.Gravity = oldGravity
-    frozenPos = nil
-    
-    -- Set tombol non-aktif (hitam)
     setButtonActive(FlyBtn, false)
 
-    for _, t in pairs(animTracks) do if t.IsPlaying then t:Stop() end end
+    if animTracks then
+        for _, t in pairs(animTracks) do
+            pcall(function() if t.IsPlaying then t:Stop() end end)
+        end
+    end
 end
 
--- Toggle tombol Fly
 FlyBtn.MouseButton1Click:Connect(function()
-    if flying then 
-        disableFly() 
-    else 
-        enableFly() 
-    end
+    if flying then disableFly() else enableFly() end
 end)
 
---===== KEYBOARD WASD INPUT =====--
-UserInputService.InputBegan:Connect(function(input, gpe)
-	if gpe then return end
-	if not flying then return end
-	if input.KeyCode == Enum.KeyCode.W then pressed.Up = true end
-	if input.KeyCode == Enum.KeyCode.S then pressed.Down = true end
-	if input.KeyCode == Enum.KeyCode.A then pressed.Left = true end
-	if input.KeyCode == Enum.KeyCode.D then pressed.Right = true end
+--===== Keyboard =====--
+UserInputService.InputBegan:Connect(function(input,gpe)
+    if gpe or not flying then return end
+    if input.KeyCode == Enum.KeyCode.W then pressed.Up = true end
+    if input.KeyCode == Enum.KeyCode.S then pressed.Down = true end
+    if input.KeyCode == Enum.KeyCode.A then pressed.Left = true end
+    if input.KeyCode == Enum.KeyCode.D then pressed.Right = true end
 end)
-
 UserInputService.InputEnded:Connect(function(input)
-	if input.KeyCode == Enum.KeyCode.W then pressed.Up = false end
-	if input.KeyCode == Enum.KeyCode.S then pressed.Down = false end
-	if input.KeyCode == Enum.KeyCode.A then pressed.Left = false end
-	if input.KeyCode == Enum.KeyCode.D then pressed.Right = false end
+    if input.KeyCode == Enum.KeyCode.W then pressed.Up = false end
+    if input.KeyCode == Enum.KeyCode.S then pressed.Down = false end
+    if input.KeyCode == Enum.KeyCode.A then pressed.Left = false end
+    if input.KeyCode == Enum.KeyCode.D then pressed.Right = false end
 end)
 
---===== GAMEPAD (LEFT STICK) =====--
+--===== Gamepad (fixed) =====--
 local DEADZONE = 0.25
-local lastX, lastY = 0, 0 -- supaya ga reset kalau stick diem
-
 UserInputService.InputChanged:Connect(function(input)
     if not flying then return end
     if input.UserInputType ~= Enum.UserInputType.Gamepad1 then return end
-    if input.KeyCode ~= Enum.KeyCode.Thumbstick1 then return end
+    -- some runtimes may not set KeyCode; rely on .Position if available
+    local x, y = 0, 0
+    if input.Position then x, y = input.Position.X, input.Position.Y end
+    if input.KeyCode == Enum.KeyCode.Thumbstick1 then
+        x, y = input.Position.X, input.Position.Y
+    end
 
-    local pos = input.Position
-    local x = pos.X
-    local y = pos.Y
-
-    -- Deadzone untuk stick
     if math.abs(x) < DEADZONE then x = 0 end
     if math.abs(y) < DEADZONE then y = 0 end
 
-    -- Hindari reset spam
-    if x == lastX and y == lastY then
-        return
-    end
-    lastX = x
-    lastY = y
-
-    -- Reset dulu hanya jika stick GERAK
-    pressed.Up = false
-    pressed.Down = false
-    pressed.Left = false
-    pressed.Right = false
-
-    -- === PERBAIKAN UTAMA: sumbu Y ROBLOX terbalik ===
-    -- Maju = y > DEADZONE
-    -- Mundur = y < -DEADZONE
-    if y > DEADZONE then pressed.Up = true end     -- maju
-    if y < -DEADZONE then pressed.Down = true end  -- mundur
-
-    -- Kiri / Kanan tetap sama
-    if x < -DEADZONE then pressed.Left = true end
-    if x > DEADZONE then pressed.Right = true end
+    pressed.Up    = (y > 0)
+    pressed.Down  = (y < 0)
+    pressed.Left  = (x < 0)
+    pressed.Right = (x > 0)
 end)
 
---===== LOOP =====--
+--===== FLY LOOP =====--
 RunService.Heartbeat:Connect(function(dt)
-    if not flying or not root then return end
+    if not flying then return end
+    -- ensure root points to current character
+    if not root or not root.Parent then
+        -- try re-acquire
+        local ch = player.Character
+        if ch then
+            character = ch
+            humanoid = ch:FindFirstChild("Humanoid") or humanoid
+            root = ch:FindFirstChild("HumanoidRootPart") or root
+        end
+        if not root then return end
+    end
 
-    -- Matikan semua physics movement
-    root.AssemblyLinearVelocity = Vector3.zero
-    root.AssemblyAngularVelocity = Vector3.zero
+    -- stop physics velocity to "freeze"
+    pcall(function()
+        root.AssemblyLinearVelocity = Vector3.new(0,0,0)
+        root.AssemblyAngularVelocity = Vector3.new(0,0,0)
+    end)
 
     local cam = workspace.CurrentCamera
+    if not cam then return end
     local lookVec = cam.CFrame.LookVector
     local rightVec = cam.CFrame.RightVector
-    local dir = Vector3.zero
+    local dir = Vector3.new(0,0,0)
 
     if pressed.Up then dir += lookVec end
     if pressed.Down then dir -= lookVec end
@@ -1008,7 +1113,7 @@ RunService.Heartbeat:Connect(function(dt)
 
     if dir.Magnitude > 0 then
         moving = true
-        frozenPos = root.Position + dir.Unit * flySpeed * dt * 60
+        frozenPos = root.Position + dir.Unit * (flySpeed * (dt * 60))
         root.CFrame = CFrame.new(frozenPos, frozenPos + lookVec)
     else
         moving = false
@@ -1019,36 +1124,45 @@ RunService.Heartbeat:Connect(function(dt)
 
     -- Animasi
     if moving then
-        if animTracks.Idle and animTracks.Idle.IsPlaying then animTracks.Idle:Stop() end
-        if animTracks.Fly and not animTracks.Fly.IsPlaying then animTracks.Fly:Play() end
+        if animTracks and animTracks.Idle and animTracks.Idle.IsPlaying then
+            pcall(function() animTracks.Idle:Stop() end)
+        end
+        if animTracks and animTracks.Fly and not animTracks.Fly.IsPlaying then
+            pcall(function() animTracks.Fly:Play() end)
+        end
     else
-        if animTracks.Fly and animTracks.Fly.IsPlaying then animTracks.Fly:Stop() end
-        if animTracks.Idle and not animTracks.Idle.IsPlaying then animTracks.Idle:Play() end
+        if animTracks and animTracks.Fly and animTracks.Fly.IsPlaying then
+            pcall(function() animTracks.Fly:Stop() end)
+        end
+        if animTracks and animTracks.Idle and not animTracks.Idle.IsPlaying then
+            pcall(function() animTracks.Idle:Play() end)
+        end
     end
 end)
 
---===== RESET =====--
-humanoid.Died:Connect(function()
-    disableFly()
-    setButtonActive(FlyBtn, false)
-end)
+--===== RESET / Respawn handling =====--
+if humanoid then
+    humanoid.Died:Connect(function()
+        disableFly()
+    end)
+end
 
 player.CharacterAdded:Connect(function(char)
     character = char
     humanoid = char:WaitForChild("Humanoid")
     root = char:WaitForChild("HumanoidRootPart")
     setupAnimator(humanoid)
-    
+
     humanoid.Died:Connect(function()
         disableFly()
-        setButtonActive(FlyBtn, false)
     end)
-    
-    -- Pastikan status tombol di-reset
+
     setButtonActive(FlyBtn, false)
+    DPad.Visible = false
+    SpeedFrame.Visible = false
 end)
 
--- Pastikan tombol Fly awalnya tidak aktif
+-- initial state
 setButtonActive(FlyBtn, false)
 
 
