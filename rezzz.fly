@@ -769,8 +769,8 @@ local root = character:WaitForChild("HumanoidRootPart")
 
 --//===== ANIMASI =====//
 local animations = {
-    Idle = 100681208320300,
-    Fly = 73980801925168,
+    Idle = 97496804953177,
+    Fly = 95412133796590,
 }
 
 local animTracks = {}
@@ -794,7 +794,7 @@ setupAnimator(humanoid)
 
 --//===== VARIABEL =====//
 local flying = false
-local flySpeed = 2
+local flySpeed = 1
 local pressed = {Up=false,Down=false,Left=false,Right=false}
 local moving = false
 local savedOrientation = nil
