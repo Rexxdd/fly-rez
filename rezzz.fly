@@ -767,26 +767,58 @@ local character = player.Character or player.CharacterAdded:Wait()
 local humanoid = character:WaitForChild("Humanoid")
 local root = character:WaitForChild("HumanoidRootPart")
 
---//===== ANIMASI =====//
+--// ===== ANIMASI (SMOOTH FIX) ===== //
 local animations = {
     Idle = 97496804953177,
-    Fly = 95412133796590,
+    Fly  = 95412133796590,
 }
 
 local animTracks = {}
 local animator
 
 local function setupAnimator(hum)
-    animator = hum:FindFirstChildOfClass("Animator") or Instance.new("Animator", hum)
+    -- pastikan Animator ada
+    animator = hum:FindFirstChildOfClass("Animator")
+    if not animator then
+        animator = Instance.new("Animator")
+        animator.Parent = hum
+    end
+
+    -- stop & clear track lama
+    for _, track in pairs(animTracks) do
+        pcall(function()
+            track:Stop(0.2)
+            track:Destroy()
+        end)
+    end
     animTracks = {}
 
+    -- load anim
     for name, id in pairs(animations) do
         local anim = Instance.new("Animation")
         anim.AnimationId = "rbxassetid://" .. id
+
         local track = animator:LoadAnimation(anim)
         track.Priority = Enum.AnimationPriority.Action
         track.Looped = true
+        track:AdjustSpeed(1)
+
         animTracks[name] = track
+    end
+end
+
+-- helper play anim (biar transisi halus)
+local function playAnim(name)
+    for n, track in pairs(animTracks) do
+        if n == name then
+            if not track.IsPlaying then
+                track:Play(0.25) -- fade in smooth
+            end
+        else
+            if track.IsPlaying then
+                track:Stop(0.25)
+            end
+        end
     end
 end
 
