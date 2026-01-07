@@ -1002,9 +1002,8 @@ player.CharacterAdded:Connect(function(char)
 end)
 
 -- Pastikan tombol Fly awalnya tidak aktif
-setButtonActive(FlyBtn, false) Tolong bikinin nih supaya kecepatannya tuh bisa diatur kayak di GSR gitu, oh dibikin plus minus aja, kayak plus, plus 1, minus 1 kecepatannya, kayak lu bikin UI kecil bisa di geser .buat plus minus kecepatan, oke?
+setButtonActive(FlyBtn, false) 
 
--- Unanchor
 local UnanchorBtn = createButton("🔓", "Unanchor")
 local player = game.Players.LocalPlayer
 local aktif = false
